@@ -9,7 +9,7 @@ section .data
     yes_msg_len equ $ - yes_msg
 
     no_msg      db "No es palindromo.",10,0
-    no_msg_len equ $ - no_msg
+    no_msg_len  equ $ - no_msg
 
 section .bss
     buf     resb 12    ; hasta 11 + null
