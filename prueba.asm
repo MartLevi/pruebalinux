@@ -12,94 +12,92 @@ section .data
     no_msg_len  equ $ - no_msg
 
 section .bss
-    buf     resb 100     ; suficiente para manejar exceso de entrada
+    buf     resb 32    ; mucho espacio para validar
     len     resb 1
 
 section .text
 global _start
 
-%macro PRN 2
+_start:
+    ; Mostrar prompt
     mov eax, 4
     mov ebx, 1
-    mov ecx, %1
-    mov edx, %2
+    mov ecx, prompt
+    mov edx, prompt_len
     int 0x80
-%endmacro
 
-%macro RDN 1
+    ; Leer entrada
     mov eax, 3
     mov ebx, 0
     mov ecx, buf
-    mov edx, %1
+    mov edx, 32       ; leer hasta 32 bytes (sobrados para detectar errores)
     int 0x80
     mov [len], eax
-%endmacro
 
-_start:
-    PRN prompt, prompt_len
-    RDN 100  ; leer hasta 100 caracteres
+    ; Eliminar salto de línea
+    mov ecx, eax
+    dec ecx
+    cmp byte [buf + ecx], 10
+    jne .skip_trim
+    mov byte [buf + ecx], 0
+    mov [len], ecx
 
-    ; Buscar el salto de línea y contar solo hasta ahí
-    xor ecx, ecx       ; ecx = índice
-    xor edi, edi       ; edi = número de caracteres válidos
+.skip_trim:
+    ; Verificar si la longitud es mayor a 10
+    movzx ecx, byte [len]
+    cmp ecx, 10
+    ja .invalid
 
-.find_nl:
-    cmp ecx, [len]
-    jge .bad_input     ; si no hay salto de línea, es inválido
-    mov al, [buf + ecx]
-    cmp al, 10         ; '\n'
-    je .check_length
-    inc edi
-    inc ecx
-    jmp .find_nl
-
-.check_length:
-    cmp edi, 0
-    je .bad_input
-    cmp edi, 10
-    ja .bad_input
-    mov [len], edi
-    mov byte [buf + edi], 0  ; null-terminate
-
-    ; Validar dígitos
+    ; Verificar si todos son dígitos
     xor esi, esi
-.validate_digits:
-    cmp esi, edi
+.check_digit:
+    cmp esi, ecx
     jge .check_pal
     mov al, [buf + esi]
-    sub al, '0'
-    cmp al, 9
-    ja .bad_input
+    cmp al, '0'
+    jl .invalid
+    cmp al, '9'
+    jg .invalid
     inc esi
-    jmp .validate_digits
+    jmp .check_digit
 
 .check_pal:
     xor esi, esi
-    mov ecx, edi
-    dec ecx
-    mov ebx, ecx
-
-.loop:
-    cmp esi, ebx
-    jge .is_pal
+    mov edi, ecx
+    dec edi
+.pal_loop:
+    cmp esi, edi
+    jge .pal_true
     mov al, [buf + esi]
-    mov dl, [buf + ebx]
-    cmp al, dl
-    jne .not_pal
+    mov bl, [buf + edi]
+    cmp al, bl
+    jne .pal_false
     inc esi
-    dec ebx
-    jmp .loop
+    dec edi
+    jmp .pal_loop
 
-.is_pal:
-    PRN yes_msg, yes_msg_len
+.pal_true:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, yes_msg
+    mov edx, yes_msg_len
+    int 0x80
     jmp .exit
 
-.not_pal:
-    PRN no_msg, no_msg_len
+.pal_false:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, no_msg
+    mov edx, no_msg_len
+    int 0x80
     jmp .exit
 
-.bad_input:
-    PRN inv_msg, inv_msg_len
+.invalid:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, inv_msg
+    mov edx, inv_msg_len
+    int 0x80
 
 .exit:
     mov eax, 1
