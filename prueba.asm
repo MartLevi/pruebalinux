@@ -1,122 +1,93 @@
-.model small
-.stack 100h
-.data
-    msgPrompt db "Ingrese un numero (max 10 digitos): $"
-    msgInvalido db 13,10, "Entrada invalida. Solo se permiten digitos.", 13,10,"$"
-    msgSi db 13,10, "Es un palindromo.", 13,10,"$"
-    msgNo db 13,10, "No es un palindromo.", 13,10,"$"
-    buffer db 11 dup('$') ; almacena hasta 10 dígitos + terminador
-    len db 0 ; longitud de la entrada
+; Palíndromo optimizado en NASM (32 bits Linux)
+org     0x08048000
 
-.code
-start:
-    mov ax, @data
-    mov ds, ax
+section .data
+    prompt      db "Ingresa numero (max 10 dig): ", 0
+    inv_msg     db "Entrada invalida.",10,0
+    yes_msg     db "Es palindromo.",10,0
+    no_msg      db "No es palindromo.",10,0
 
-    ; Mostrar mensaje de entrada
-    lea dx, msgPrompt
-    call mostrar
+section .bss
+    buf     resb 11    ; 10 dígitos + null
+    len     resb 1     ; longitud: 0-10
 
-    ; Leer cadena del usuario
-    call leerCadena
-
-    ; Validar solo dígitos
-    call validarEntrada
-    cmp al, 0
-    je entradaInvalida
-
-    ; Validar palíndromo
-    call esPalindromo
-    cmp al, 1
-    je es_palindromo
-
-    ; Mostrar "No es palindromo"
-    lea dx, msgNo
-    call mostrar
-    jmp fin
-
-es_palindromo:
-    lea dx, msgSi
-    call mostrar
-    jmp fin
-
-entradaInvalida:
-    lea dx, msgInvalido
-    call mostrar
-
-fin:
-    mov ah, 4ch
-    int 21h
+section .text
+global _start
 
 ; ----------------------------
-; Macros
+; Syscall wrappers
+%macro PRN 2
+    mov eax,4
+    mov ebx,1
+    mov ecx, %1
+    mov edx, %2
+    int 0x80
+%endmacro
+
+%macro RDN 1
+    mov eax,3
+    mov ebx,0
+    mov ecx, buf
+    mov edx, %1
+    int 0x80
+    mov [len], al
+%endmacro
 ; ----------------------------
-mostrar macro
-    mov ah, 09h
-    int 21h
-endm
 
-; ----------------------------
-; Procedimientos
-; ----------------------------
+_start:
+    PRN prompt, 24        ; mostrar mensaje
+    RDN 11                ; leer hasta 11 bytes
 
-leerCadena proc
-    xor cx, cx
-    mov si, 0
-leer_loop:
-    mov ah, 01h
-    int 21h
-    cmp al, 13         ; Enter?
-    je fin_lectura
-    cmp si, 10
-    jae fin_lectura
-    mov buffer[si], al
-    inc si
-    jmp leer_loop
-fin_lectura:
-    mov len, si
-    ret
-leerCadena endp
+    ; remover salto de línea si existe
+    movzx ecx, byte [len]
+    dec ecx
+    cmp byte [buf + ecx], 10
+    jne .validated
+    mov byte [len], cl
 
-validarEntrada proc
-    xor si, si
-val_loop:
-    mov al, buffer[si]
-    cmp al, '0'
-    jb invalido
-    cmp al, '9'
-    ja invalido
-    inc si
-    cmp si, len
-    jl val_loop
-    mov al, 1
-    ret
-invalido:
-    mov al, 0
-    ret
-validarEntrada endp
+.validated:
+    ; validar caracteres y determinar len
+    xor esi, esi
+    movzx ecx, byte [len]
 
-esPalindromo proc
-    xor si, si
-    mov cl, len
-    dec cl
-    mov di, cx
-pal_loop:
-    mov al, buffer[si]
-    mov bl, buffer[di]
+.chk_loop:
+    cmp esi, ecx
+    jge .check_pal
+    mov al, [buf + esi]
+    sub al, '0'
+    cmp al, 9
+    ja .bad_input
+    inc esi
+    jmp .chk_loop
+
+.bad_input:
+    PRN inv_msg, 15
+    jmp .exit
+
+.check_pal:
+    xor esi, esi
+    dec ecx
+    mov edi, ecx
+
+.pal_loop:
+    cmp esi, edi
+    jge .is_pal
+    mov al, [buf + esi]
+    mov bl, [buf + edi]
     cmp al, bl
-    jne no_pal
-    inc si
-    dec di
-    cmp si, di
-    jge si_es
-    jmp pal_loop
-si_es:
-    mov al, 1
-    ret
-no_pal:
-    mov al, 0
-    ret
-esPalindromo endp
+    jne .not_pal
+    inc esi
+    dec edi
+    jmp .pal_loop
 
-end start
+.is_pal:
+    PRN yes_msg, 17
+    jmp .exit
+
+.not_pal:
+    PRN no_msg, 16
+
+.exit:
+    mov eax,1
+    xor ebx, ebx
+    int 0x80
