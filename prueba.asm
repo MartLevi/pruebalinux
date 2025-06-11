@@ -13,38 +13,34 @@ section .data
     no_msg_len  equ $ - no_msg
 
 section .bss
-    buf     resb 12    ; 10 dígitos + \n + null
+    buf     resb 12    ; hasta 11 + null
     len     resb 1
 
 section .text
 global _start
 
-; ----------------------------
-; Syscall wrappers
 %macro PRN 2
-    mov eax,4
-    mov ebx,1
+    mov eax, 4
+    mov ebx, 1
     mov ecx, %1
     mov edx, %2
     int 0x80
 %endmacro
 
 %macro RDN 1
-    mov eax,3
-    mov ebx,0
+    mov eax, 3
+    mov ebx, 0
     mov ecx, buf
     mov edx, %1
     int 0x80
     mov [len], al
 %endmacro
-; ----------------------------
 
 _start:
-.loop:
-    PRN prompt, prompt_len        ; mostrar mensaje
-    RDN 12                        ; leer hasta 12 bytes
+    PRN prompt, prompt_len
+    RDN 12
 
-    ; remover salto de línea si existe
+    ; quitar newline si existe
     movzx ecx, byte [len]
     mov edi, ecx
     dec edi
@@ -55,14 +51,14 @@ _start:
     jmp .check_length
 
 .no_trim:
-    mov byte [buf + ecx], 0  ; asegurar null terminador
+    mov byte [buf + ecx], 0
 
 .check_length:
     movzx ecx, byte [len]
     cmp ecx, 10
     ja .bad_input
 
-    ; validar caracteres
+.validate:
     xor esi, esi
     movzx ecx, byte [len]
 
@@ -75,10 +71,6 @@ _start:
     ja .bad_input
     inc esi
     jmp .chk_loop
-
-.bad_input:
-    PRN inv_msg, inv_msg_len
-    jmp .loop
 
 .check_pal:
     xor esi, esi
@@ -103,8 +95,12 @@ _start:
 
 .not_pal:
     PRN no_msg, no_msg_len
+    jmp .exit
+
+.bad_input:
+    PRN inv_msg, inv_msg_len
 
 .exit:
-    mov eax,1
+    mov eax, 1
     xor ebx, ebx
     int 0x80
