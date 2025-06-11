@@ -1,82 +1,91 @@
 section .data
+    ; Mensaje que se muestra al usuario para solicitar un número de hasta 10 dígitos
     prompt      db "Ingresa numero (max 10 dig): ", 0
-    prompt_len  equ $ - prompt
+    prompt_len  equ $ - prompt  ; Longitud del mensaje
 
+    ; Mensaje que se mostrará si la entrada es inválida
     inv_msg     db "Entrada invalida.",10,0
     inv_msg_len equ $ - inv_msg
 
+    ; Mensaje si el número ingresado es un palíndromo
     yes_msg     db "Es palindromo.",10,0
     yes_msg_len equ $ - yes_msg
 
+    ; Mensaje si el número ingresado no es un palíndromo
     no_msg      db "No es palindromo.",10,0
     no_msg_len  equ $ - no_msg
 
 section .bss
-    buf     resb 32    ; mucho espacio para validar
+    ; Reservamos espacio para la entrada del usuario (32 bytes para asegurarnos de detectar entradas demasiado largas)
+    buf     resb 32
+
+    ; Aquí guardamos la longitud real de la cadena ingresada
     len     resb 1
 
 section .text
 global _start
 
 _start:
-    ; Mostrar prompt
-    mov eax, 4
-    mov ebx, 1
-    mov ecx, prompt
-    mov edx, prompt_len
-    int 0x80
+    ; Mostrar el mensaje de entrada al usuario
+    mov eax, 4          ; syscall: sys_write
+    mov ebx, 1          ; descriptor de salida estándar (stdout)
+    mov ecx, prompt     ; puntero al mensaje
+    mov edx, prompt_len ; longitud del mensaje
+    int 0x80            ; llamada al sistema
 
-    ; Leer entrada
-    mov eax, 3
-    mov ebx, 0
-    mov ecx, buf
-    mov edx, 32       ; leer hasta 32 bytes (sobrados para detectar errores)
+    ; Leer la entrada del usuario
+    mov eax, 3          ; syscall: sys_read
+    mov ebx, 0          ; descriptor de entrada estándar (stdin)
+    mov ecx, buf        ; puntero al buffer donde se almacenará la entrada
+    mov edx, 32         ; número máximo de bytes a leer (más de 10 para poder detectar exceso)
     int 0x80
-    mov [len], eax
+    mov [len], eax      ; guardamos la cantidad de bytes leídos (incluye '\n' si lo hay)
 
-    ; Eliminar salto de línea
-    mov ecx, eax
-    dec ecx
-    cmp byte [buf + ecx], 10
-    jne .skip_trim
-    mov byte [buf + ecx], 0
-    mov [len], ecx
+    ; Intentamos remover el salto de línea final si existe
+    mov ecx, eax        ; guardamos longitud original
+    dec ecx             ; posición del último carácter
+    cmp byte [buf + ecx], 10 ; ¿es un salto de línea?
+    jne .skip_trim           ; si no lo es, seguimos sin modificar
+    mov byte [buf + ecx], 0  ; si lo es, lo reemplazamos por NULL
+    mov [len], ecx           ; actualizamos la longitud (sin '\n')
 
 .skip_trim:
-    ; Verificar si la longitud es mayor a 10
-    movzx ecx, byte [len]
+    ; Verificamos si la longitud de la entrada es mayor a 10
+    movzx ecx, byte [len] ; ecx ← longitud de entrada
     cmp ecx, 10
-    ja .invalid
+    ja .invalid           ; si hay más de 10 caracteres → entrada inválida
 
-    ; Verificar si todos son dígitos
-    xor esi, esi
+    ; Verificamos que todos los caracteres ingresados sean dígitos del 0 al 9
+    xor esi, esi          ; índice desde 0
 .check_digit:
     cmp esi, ecx
-    jge .check_pal
-    mov al, [buf + esi]
+    jge .check_pal        ; si ya revisamos todos, pasamos a verificar si es palíndromo
+    mov al, [buf + esi]   ; al ← carácter actual
     cmp al, '0'
-    jl .invalid
+    jl .invalid           ; si es menor que '0', no es un dígito
     cmp al, '9'
-    jg .invalid
+    jg .invalid           ; si es mayor que '9', tampoco es un dígito
     inc esi
-    jmp .check_digit
+    jmp .check_digit      ; continuamos con el siguiente carácter
 
 .check_pal:
-    xor esi, esi
+    ; Revisamos si el número es un palíndromo (se lee igual de izq. a der. que de der. a izq.)
+    xor esi, esi          ; índice inicial (inicio de la cadena)
     mov edi, ecx
-    dec edi
+    dec edi               ; índice final (último carácter)
 .pal_loop:
     cmp esi, edi
-    jge .pal_true
+    jge .pal_true         ; si ya nos cruzamos en el centro → es palíndromo
     mov al, [buf + esi]
     mov bl, [buf + edi]
     cmp al, bl
-    jne .pal_false
+    jne .pal_false        ; si no son iguales → no es palíndromo
     inc esi
     dec edi
-    jmp .pal_loop
+    jmp .pal_loop         ; seguimos comparando hacia el centro
 
 .pal_true:
+    ; Mostramos mensaje de que sí es palíndromo
     mov eax, 4
     mov ebx, 1
     mov ecx, yes_msg
@@ -85,6 +94,7 @@ _start:
     jmp .exit
 
 .pal_false:
+    ; Mostramos mensaje de que no es palíndromo
     mov eax, 4
     mov ebx, 1
     mov ecx, no_msg
@@ -93,6 +103,7 @@ _start:
     jmp .exit
 
 .invalid:
+    ; Mostramos mensaje de entrada inválida (más de 10 dígitos o caracteres no numéricos)
     mov eax, 4
     mov ebx, 1
     mov ecx, inv_msg
@@ -100,6 +111,7 @@ _start:
     int 0x80
 
 .exit:
-    mov eax, 1
-    xor ebx, ebx
+    ; Terminamos el programa limpiamente
+    mov eax, 1      ; syscall: sys_exit
+    xor ebx, ebx    ; código de salida 0
     int 0x80
