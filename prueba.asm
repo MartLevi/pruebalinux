@@ -12,7 +12,7 @@ section .data
     no_msg_len  equ $ - no_msg
 
 section .bss
-    buf     resb 12    ; hasta 11 + null
+    buf     resb 100     ; suficiente para manejar exceso de entrada
     len     resb 1
 
 section .text
@@ -32,61 +32,63 @@ global _start
     mov ecx, buf
     mov edx, %1
     int 0x80
-    mov [len], al
+    mov [len], eax
 %endmacro
 
 _start:
     PRN prompt, prompt_len
-    RDN 12
+    RDN 100  ; leer hasta 100 caracteres
 
-    ; quitar newline si existe
-    movzx ecx, byte [len]
-    mov edi, ecx
-    dec edi
-    cmp byte [buf + edi], 10
-    jne .no_trim
-    mov byte [buf + edi], 0
-    mov byte [len], edi
-    jmp .check_length
+    ; Buscar el salto de línea y contar solo hasta ahí
+    xor ecx, ecx       ; ecx = índice
+    xor edi, edi       ; edi = número de caracteres válidos
 
-.no_trim:
-    mov byte [buf + ecx], 0
+.find_nl:
+    cmp ecx, [len]
+    jge .bad_input     ; si no hay salto de línea, es inválido
+    mov al, [buf + ecx]
+    cmp al, 10         ; '\n'
+    je .check_length
+    inc edi
+    inc ecx
+    jmp .find_nl
 
 .check_length:
-    movzx ecx, byte [len]
-    cmp ecx, 10
+    cmp edi, 0
+    je .bad_input
+    cmp edi, 10
     ja .bad_input
+    mov [len], edi
+    mov byte [buf + edi], 0  ; null-terminate
 
-.validate:
+    ; Validar dígitos
     xor esi, esi
-    movzx ecx, byte [len]
-
-.chk_loop:
-    cmp esi, ecx
+.validate_digits:
+    cmp esi, edi
     jge .check_pal
     mov al, [buf + esi]
     sub al, '0'
     cmp al, 9
     ja .bad_input
     inc esi
-    jmp .chk_loop
+    jmp .validate_digits
 
 .check_pal:
     xor esi, esi
-    movzx ecx, byte [len]
+    mov ecx, edi
     dec ecx
-    mov edi, ecx
+    mov ebx, ecx
 
-.pal_loop:
-    cmp esi, edi
+.loop:
+    cmp esi, ebx
     jge .is_pal
     mov al, [buf + esi]
-    mov bl, [buf + edi]
-    cmp al, bl
+    mov dl, [buf + ebx]
+    cmp al, dl
     jne .not_pal
     inc esi
-    dec edi
-    jmp .pal_loop
+    dec ebx
+    jmp .loop
 
 .is_pal:
     PRN yes_msg, yes_msg_len
