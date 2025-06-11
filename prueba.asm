@@ -1,11 +1,16 @@
 ; Palíndromo optimizado en NASM (32 bits Linux)
-org     0x08048000
-
 section .data
     prompt      db "Ingresa numero (max 10 dig): ", 0
+    prompt_len  equ $ - prompt
+
     inv_msg     db "Entrada invalida.",10,0
+    inv_msg_len equ $ - inv_msg
+
     yes_msg     db "Es palindromo.",10,0
+    yes_msg_len equ $ - yes_msg
+
     no_msg      db "No es palindromo.",10,0
+    no_msg_len  equ $ - no_msg
 
 section .bss
     buf     resb 11    ; 10 dígitos + null
@@ -35,8 +40,8 @@ global _start
 ; ----------------------------
 
 _start:
-    PRN prompt, 24        ; mostrar mensaje
-    RDN 11                ; leer hasta 11 bytes
+    PRN prompt, prompt_len        ; mostrar mensaje
+    RDN 11                       ; leer hasta 11 bytes
 
     ; remover salto de línea si existe
     movzx ecx, byte [len]
@@ -61,8 +66,9 @@ _start:
     jmp .chk_loop
 
 .bad_input:
-    PRN inv_msg, 15
-    jmp .exit
+    PRN inv_msg, inv_msg_len
+    ; Aquí podrías repetir la lectura si quieres
+    jmp .start
 
 .check_pal:
     xor esi, esi
@@ -81,13 +87,28 @@ _start:
     jmp .pal_loop
 
 .is_pal:
-    PRN yes_msg, 17
+    PRN yes_msg, yes_msg_len
     jmp .exit
 
 .not_pal:
-    PRN no_msg, 16
+    PRN no_msg, no_msg_len
 
 .exit:
     mov eax,1
     xor ebx, ebx
     int 0x80
+
+; Para repetir el proceso tras entrada inválida
+.start:
+    PRN prompt, prompt_len
+    RDN 11
+    movzx ecx, byte [len]
+    dec ecx
+    cmp byte [buf + ecx], 10
+    jne .validated2
+    mov byte [len], cl
+
+.validated2:
+    xor esi, esi
+    movzx ecx, byte [len]
+    jmp .chk_loop
