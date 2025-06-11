@@ -13,8 +13,8 @@ section .data
     no_msg_len  equ $ - no_msg
 
 section .bss
-    buf     resb 11    ; 10 dígitos + null
-    len     resb 1     ; longitud: 0-10
+    buf     resb 12    ; 10 dígitos + \n + null
+    len     resb 1
 
 section .text
 global _start
@@ -40,18 +40,29 @@ global _start
 ; ----------------------------
 
 _start:
+.loop:
     PRN prompt, prompt_len        ; mostrar mensaje
-    RDN 11                       ; leer hasta 11 bytes
+    RDN 12                        ; leer hasta 12 bytes
 
     ; remover salto de línea si existe
     movzx ecx, byte [len]
-    dec ecx
-    cmp byte [buf + ecx], 10
-    jne .validated
-    mov byte [len], cl
+    mov edi, ecx
+    dec edi
+    cmp byte [buf + edi], 10
+    jne .no_trim
+    mov byte [buf + edi], 0
+    mov byte [len], edi
+    jmp .check_length
 
-.validated:
-    ; validar caracteres y determinar len
+.no_trim:
+    mov byte [buf + ecx], 0  ; asegurar null terminador
+
+.check_length:
+    movzx ecx, byte [len]
+    cmp ecx, 10
+    ja .bad_input
+
+    ; validar caracteres
     xor esi, esi
     movzx ecx, byte [len]
 
@@ -67,11 +78,11 @@ _start:
 
 .bad_input:
     PRN inv_msg, inv_msg_len
-    ; Aquí podrías repetir la lectura si quieres
-    jmp .start
+    jmp .loop
 
 .check_pal:
     xor esi, esi
+    movzx ecx, byte [len]
     dec ecx
     mov edi, ecx
 
@@ -97,18 +108,3 @@ _start:
     mov eax,1
     xor ebx, ebx
     int 0x80
-
-; Para repetir el proceso tras entrada inválida
-.start:
-    PRN prompt, prompt_len
-    RDN 11
-    movzx ecx, byte [len]
-    dec ecx
-    cmp byte [buf + ecx], 10
-    jne .validated2
-    mov byte [len], cl
-
-.validated2:
-    xor esi, esi
-    movzx ecx, byte [len]
-    jmp .chk_loop
