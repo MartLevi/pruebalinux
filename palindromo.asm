@@ -25,13 +25,17 @@ section .bss
 section .text
 global _start
 
+%macro PRINT 2
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, %1
+    mov edx, %2
+    int 0x80
+%endmacro
+
 _start:
     ; Mostrar el mensaje de entrada al usuario
-    mov eax, 4          ; syscall: sys_write
-    mov ebx, 1          ; descriptor de salida estándar (stdout)
-    mov ecx, prompt     ; puntero al mensaje
-    mov edx, prompt_len ; longitud del mensaje
-    int 0x80            ; llamada al sistema
+    PRINT prompt, prompt_len
 
     ; Leer la entrada del usuario
     mov eax, 3          ; syscall: sys_read
@@ -86,29 +90,17 @@ _start:
 
 .pal_true:
     ; Mostramos mensaje de que sí es palíndromo
-    mov eax, 4
-    mov ebx, 1
-    mov ecx, yes_msg
-    mov edx, yes_msg_len
-    int 0x80
+    PRINT yes_msg, yes_msg_len
     jmp .exit
 
 .pal_false:
     ; Mostramos mensaje de que no es palíndromo
-    mov eax, 4
-    mov ebx, 1
-    mov ecx, no_msg
-    mov edx, no_msg_len
-    int 0x80
+    PRINT no_msg, no_msg_len
     jmp .exit
 
 .invalid:
     ; Mostramos mensaje de entrada inválida (más de 10 dígitos o caracteres no numéricos)
-    mov eax, 4
-    mov ebx, 1
-    mov ecx, inv_msg
-    mov edx, inv_msg_len
-    int 0x80
+    PRINT inv_msg, inv_msg_len
 
 .exit:
     ; Terminamos el programa limpiamente
